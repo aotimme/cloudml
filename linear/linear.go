@@ -1,10 +1,17 @@
-package db
+package linear
 
 import (
   "github.com/skelterjohn/go.matrix"
 )
 
-func Linear(data [][]float64, values []float64) ([]float64, error) {
+func dot(vec1, vec2 []float64) (val float64) {
+  for i, v := range vec1 {
+    val += v * vec2[i]
+  }
+  return
+}
+
+func Learn(data [][]float64, values []float64) ([]float64, error) {
   X := matrix.MakeDenseMatrixStacked(data)
   Y := matrix.MakeDenseMatrix(values, len(values), 1)
   Xt := X.Transpose()
@@ -25,4 +32,8 @@ func Linear(data [][]float64, values []float64) ([]float64, error) {
     return nil, err
   }
   return coefficients.Array(), nil
+}
+
+func Predict(beta []float64, covariates []float64) float64 {
+  return dot(beta, covariates)
 }

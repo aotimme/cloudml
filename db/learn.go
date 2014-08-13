@@ -2,6 +2,7 @@ package db
 
 import (
   "github.com/aotimme/cloudml/logistic"
+  "github.com/aotimme/cloudml/linear"
   "log"
   "sort"
 )
@@ -62,14 +63,13 @@ func (m *Model) Learn() error {
   }
   var coefficients []float64
   if m.Type == "logistic" {
-    coefficients = m.GetCoefficientsArray()
-    coefficients, err = logistic.Learn(dataArray, values, coefficients, 100)
+    coefficients, err = logistic.Learn(dataArray, values, m.GetCoefficientsArray(), 100)
     if err != nil {
       log.Printf("Error running regression: %v\n", err)
       return err
     }
   } else if m.Type == "linear" {
-    coefficients, err = Linear(dataArray, values)
+    coefficients, err = linear.Learn(dataArray, values)
     if err != nil {
       log.Printf("Error running regression\n")
       return err
@@ -99,7 +99,7 @@ func (m *Model) Predict(covariates map[string]float64) float64 {
   if m.Type == "logistic" {
     return logistic.Predict(coefficients, covs)
   } else if m.Type == "linear" {
-    return dot
+    return linear.Predict(coefficients, covs)
   }
   return 0.0
 }
