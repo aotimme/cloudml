@@ -167,7 +167,7 @@ func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
 func LearnModelHandler(rw http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
   id := vars["id"]
-  log.Printf("Handling PUT \"/api/models/%v/learn\"\n", id)
+  log.Printf("Handling POST \"/api/models/%v/learn\"\n", id)
   m, err := db.GetModelById(id)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusNotFound)
@@ -180,6 +180,24 @@ func LearnModelHandler(rw http.ResponseWriter, req *http.Request) {
   }
   SendModelJSON(rw, m)
 }
+
+func CVModelHandler(rw http.ResponseWriter, req *http.Request) {
+  vars := mux.Vars(req)
+  id := vars["id"]
+  log.Printf("Handling POST \"/api/models/%v/cv\"\n", id)
+  m, err := db.GetModelById(id)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusNotFound)
+    return
+  }
+  err = m.CV()
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  SendModelJSON(rw, m)
+}
+
 
 func PredictModelHandler(rw http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
@@ -258,6 +276,7 @@ func main() {
   // TODO: Remove? Not actually necessary (learn on each data save)
   r.HandleFunc("/api/models/{id}/learn", LearnModelHandler).Methods("POST")
   r.HandleFunc("/api/models/{id}/predict", PredictModelHandler).Methods("POST")
+  r.HandleFunc("/api/models/{id}/cv", CVModelHandler).Methods("POST")
   r.HandleFunc("/", IndexHandler).Methods("GET")
   http.Handle("/", r)
   port := "6060"

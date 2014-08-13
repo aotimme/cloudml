@@ -48,7 +48,7 @@ func RMSE(beta []float64, data [][]float64, values []float64) float64 {
   return math.Sqrt(rmse)
 }
 
-func CV(data [][]float64, values []float64) ([]float64, error) {
+func CV(data [][]float64, values []float64) (float64, error) {
   fold := 5
   cvRMSE := make([]float64, fold)
   n := len(data)
@@ -73,9 +73,14 @@ func CV(data [][]float64, values []float64) ([]float64, error) {
     }
     betas, err := Learn(tmpData, tmpValues)
     if err != nil {
-      return nil, err
+      return 0.0, err
     }
     cvRMSE[i] = RMSE(betas, tmpData, tmpValues)
   }
-  return cvRMSE, nil
+  avg := 0.0
+  for _, cv := range cvRMSE {
+    avg += cv
+  }
+  avg /= float64(fold)
+  return avg, nil
 }

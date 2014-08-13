@@ -84,6 +84,34 @@ func (m *Model) Learn() error {
   return nil
 }
 
+func (m *Model) CV() error {
+  dataArray, values, err := m.GetDataArray()
+  if err != nil {
+    return err
+  }
+  var cv float64
+  if m.Type == "logistic" {
+    cv, err = logistic.CV(dataArray, values)
+    if err != nil {
+      log.Printf("Error running cv: %v\n", err)
+      return err
+    }
+  } else if m.Type == "linear" {
+    cv, err = linear.CV(dataArray, values)
+    if err != nil {
+      log.Printf("Error running cv: %v\n", err)
+      return err
+    }
+  }
+  m.CVError = cv
+  err = m.Save()
+  if err != nil {
+    log.Printf("Error saving model\n")
+    return err
+  }
+  return nil
+}
+
 func (m *Model) Predict(covariates map[string]float64) float64 {
   dot := 0.0
   for key, val := range m.Coefficients {
