@@ -2,6 +2,7 @@ package logistic
 
 import (
   "math"
+  "math/rand"
   "log"
   "github.com/skelterjohn/go.matrix"
 )
@@ -106,4 +107,46 @@ func Learn(data [][]float64, values []float64, betaStart []float64, iterations i
     //log.Printf("Obj : %v\n", objective)
   }
   return beta.Array(), nil
+}
+
+func RMSE(beta []float64, data [][]float64, values []float64) float64 {
+  rmse := 0.0
+  for i, datum := range data {
+    rmse += math.Pow(values[i] - Predict(beta, datum), 2.0)
+  }
+  return math.Sqrt(rmse)
+}
+
+func CV(data [][]float64, values []float64) ([]float64, error) {
+  fold := 5
+  cvRMSE := make([]float64, fold)
+  n := len(data)
+  p := len(data[0])
+  // NOTE: stop if p > fold*n
+  perm := rand.Perm(n)
+  for i, j := range perm {
+    data[i], data[j] = data[j], data[i]
+    values[i], values[j] = values[j], values[i]
+  }
+  numPer := n / fold
+  mod := n % fold
+  for i := 0; i < fold; i++ {
+    num := numPer
+    if i < mod {
+      num++
+    }
+    tmpValues := make([]float64, num)
+    tmpData := make([][]float64, num)
+    for j := 0; j < num; j++ {
+      tmpData[j] = data[j*fold+i]
+      tmpValues[j] = values[j*fold+i]
+    }
+    betaStart := make([]float64, p)
+    betas, err := Learn(tmpData, tmpValues, betaStart, 100)
+    if err != nil {
+      return nil, err
+    }
+    cvRMSE[i] = RMSE(betas, tmpData, tmpValues)
+  }
+  return cvRMSE, nil
 }
