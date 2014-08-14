@@ -15,13 +15,23 @@ func dot(vec1, vec2 []float64) (val float64) {
 }
 
 func Learn(data [][]float64, values []float64) ([]float64, error) {
+  n := len(data)
+  p := len(data[0])
+  lambda := 0.001
   X := matrix.MakeDenseMatrixStacked(data)
-  Y := matrix.MakeDenseMatrix(values, len(values), 1)
+  Y := matrix.MakeDenseMatrix(values, n, 1)
   Xt := X.Transpose()
   XtX, err := Xt.TimesDense(X)
   if err != nil {
     return nil, err
   }
+  lambdaMatrix := matrix.Eye(p)
+  lambdaMatrix.Scale(lambda)
+  err = XtX.AddDense(lambdaMatrix)
+  if err != nil {
+    return nil, err
+  }
+
   XtXInv, err := XtX.Inverse()
   if err != nil {
     return nil, err

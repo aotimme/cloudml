@@ -9,6 +9,8 @@ import (
   "fmt"
 )
 
+var learnChannel chan string = make(chan string, 1000)
+
 type PreModel struct {
   Type string `json:"type"`
   Covariates []string `json:"covariates"`
@@ -17,6 +19,7 @@ type PreDatum struct {
   Value float64 `json:"value"`
   Covariates map[string]float64 `json:"covariates"`
 }
+
 
 func SendModelJSON(rw http.ResponseWriter, model *db.Model) {
   jsonData, err := json.Marshal(model)
@@ -131,7 +134,7 @@ func CreateDatumHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
-  go m.Learn()
+  learnChannel <- m.Id
   SendDatumJSON(rw, d)
 }
 
@@ -160,7 +163,7 @@ func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
     }
     ds[i] = d
   }
-  go m.Learn()
+  learnChannel <- m.Id
   SendDataJSON(rw, ds)
 }
 
@@ -265,6 +268,17 @@ func RemoveDataHandler(rw http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+  go func(ch <-chan string) {
+    for id := range ch {
+      m, err := db.GetModelById(id)
+      if err != nil {
+        log.Printf("Learn error: %v\n", err)
+      } else {
+        m.Learn()
+      }
+    }
+  }(learnChannel)
+
   r := mux.NewRouter()
   r.HandleFunc("/api/models", CreateModelHandler).Methods("POST")
   r.HandleFunc("/api/models/{id}", GetModelHandler).Methods("GET")

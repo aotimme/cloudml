@@ -31,6 +31,7 @@ func Predict(beta []float64, covariates []float64) float64 {
 }
 
 func Learn(data [][]float64, values []float64, betaStart []float64, iterations int) ([]float64, error) {
+  lambda := 0.001
   n := len(data)
   p := len(betaStart)
   iter := 0
@@ -44,8 +45,10 @@ func Learn(data [][]float64, values []float64, betaStart []float64, iterations i
     iter++
     //log.Printf("Iteration: %v\n", iter)
     //log.Printf("beta = %v\n", beta)
-    hessian := matrix.Zeros(p, p)
-    gradient := matrix.Zeros(p, 1)
+    hessian := matrix.Eye(p)
+    hessian.Scale(-lambda)
+    gradient := beta.Copy()
+    gradient.Scale(-lambda)
     lin, err := X.TimesDense(beta)
     if err != nil {
       return nil, err
