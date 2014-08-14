@@ -114,12 +114,12 @@ func RMSE(beta []float64, data [][]float64, values []float64) float64 {
   for i, datum := range data {
     rmse += math.Pow(values[i] - Predict(beta, datum), 2.0)
   }
+  rmse /= float64(len(data))
   return math.Sqrt(rmse)
 }
 
 func CV(data [][]float64, values []float64) (float64, error) {
   fold := 5
-  cvRMSE := make([]float64, fold)
   n := len(data)
   p := len(data[0])
   // NOTE: stop if p > fold*n
@@ -130,28 +130,49 @@ func CV(data [][]float64, values []float64) (float64, error) {
   }
   numPer := n / fold
   mod := n % fold
+  cv := 0.0
+  numRun := 0
   for i := 0; i < fold; i++ {
-    num := numPer
-    if i < mod {
-      num++
+    minBreakVal := 0
+    for j := 0; j < i; j++ {
+      minBreakVal += numPer
+      if j < mod {
+        minBreakVal++
+      }
     }
-    tmpValues := make([]float64, num)
-    tmpData := make([][]float64, num)
-    for j := 0; j < num; j++ {
-      tmpData[j] = data[j*fold+i]
-      tmpValues[j] = values[j*fold+i]
+    maxBreakVal := 0
+    for j := 0; j < i + 1; j++ {
+      maxBreakVal += numPer
+      if j < mod {
+        maxBreakVal++
+      }
+    }
+    num := maxBreakVal - minBreakVal
+    trainValues := make([]float64, n - num)
+    trainData := make([][]float64, n - num)
+    testValues := make([]float64, num)
+    testData := make([][]float64, num)
+    for j := 0; j < n; j++ {
+      if j < minBreakVal {
+        trainData[j] = data[j]
+        trainValues[j] = values[j]
+      } else if j < maxBreakVal {
+        testData[j - minBreakVal] = data[j]
+        testValues[j - minBreakVal] = values[j]
+      } else {
+        trainData[j - num] = data[j]
+        trainValues[j - num] = values[j]
+      }
     }
     betaStart := make([]float64, p)
-    betas, err := Learn(tmpData, tmpValues, betaStart, 100)
+    betas, err := Learn(trainData, trainValues, betaStart, 100)
     if err != nil {
-      return 0.0, err
+      log.Printf("CV error: %v\n", err)
+    } else {
+      numRun++
     }
-    cvRMSE[i] = RMSE(betas, tmpData, tmpValues)
+    cv += RMSE(betas, testData, testValues)
   }
-  avg := 0.0
-  for _, cv := range cvRMSE {
-    avg += cv
-  }
-  avg /= float64(fold)
-  return avg, nil
+  cv /= float64(numRun)
+  return cv, nil
 }
