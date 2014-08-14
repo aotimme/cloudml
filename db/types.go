@@ -5,7 +5,8 @@ type Model struct {
   Type string `json:"type"`
   Coefficients map[string]float64 `json:"coefficients"`
   N int `json:"n"`
-  CVError float64 `json:"cv_error"`
+  TrainRmse float64 `json:"train_rmse"`
+  CvRmse float64 `json:"cv_rmse"`
 }
 
 type Datum struct {

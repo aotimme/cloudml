@@ -68,12 +68,14 @@ func (m *Model) Learn() error {
       log.Printf("Error running regression: %v\n", err)
       return err
     }
+    m.TrainRmse = logistic.RMSE(coefficients, dataArray, values)
   } else if m.Type == "linear" {
     coefficients, err = linear.Learn(dataArray, values)
     if err != nil {
       log.Printf("Error running regression\n")
       return err
     }
+    m.TrainRmse = linear.RMSE(coefficients, dataArray, values)
   }
   m.SetCoefficientsFromArray(coefficients)
   err = m.Save()
@@ -103,7 +105,7 @@ func (m *Model) CV() error {
       return err
     }
   }
-  m.CVError = cv
+  m.CvRmse = cv
   err = m.Save()
   if err != nil {
     log.Printf("Error saving model\n")
