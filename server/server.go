@@ -30,6 +30,16 @@ func SendModelJSON(rw http.ResponseWriter, model *db.Model) {
   rw.Header().Set("Content-Type", "application/json")
   rw.Write(jsonData)
 }
+func SendModelsJSON(rw http.ResponseWriter, models []*db.Model) {
+  jsonData, err := json.Marshal(models)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  rw.Header().Set("Content-Type", "application/json")
+  rw.Write(jsonData)
+}
+
 func SendDatumJSON(rw http.ResponseWriter, d *db.Datum) {
   jsonData, err := json.Marshal(d)
   if err != nil {
@@ -82,6 +92,17 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
 
   SendModelJSON(rw, m)
 }
+
+func GetModelsHandler(rw http.ResponseWriter, req *http.Request) {
+  log.Printf("Handling GET \"/api/models\"\n")
+  models, err := db.GetAllModels()
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusNotFound)
+    return
+  }
+  SendModelsJSON(rw, models)
+}
+
 
 func GetModelHandler(rw http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
@@ -281,6 +302,7 @@ func main() {
 
   r := mux.NewRouter()
   r.HandleFunc("/api/models", CreateModelHandler).Methods("POST")
+  r.HandleFunc("/api/models", GetModelsHandler).Methods("GET")
   r.HandleFunc("/api/models/{id}", GetModelHandler).Methods("GET")
   r.HandleFunc("/api/models/{id}", DeleteModelHandler).Methods("DELETE")
   r.HandleFunc("/api/models/{id}/datum", CreateDatumHandler).Methods("POST")

@@ -29,6 +29,26 @@ func GetModelFromJSON(jsonData []byte) (*Model, error) {
   return &m, nil
 }
 
+func GetAllModels() ([]*Model, error) {
+  dir, err := os.Open(DATA_DIR)
+  if err != nil {
+    return nil, err
+  }
+  modelDirs, err := dir.Readdir(0)
+  if err != nil {
+    return nil, err
+  }
+  models := make([]*Model, len(modelDirs))
+  for i, modelDir := range modelDirs {
+    id := modelDir.Name()
+    models[i], err = GetModelById(id)
+    if err != nil {
+      return nil, err
+    }
+  }
+  return models, nil
+}
+
 func GetModelById(id string) (*Model, error) {
   filename := path.Join(DATA_DIR, id, "model.json")
   jsonData, err := ioutil.ReadFile(filename)
