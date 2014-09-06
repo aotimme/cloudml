@@ -4,7 +4,7 @@ type Model struct {
   Id string `json:"id"`
   Type string `json:"type"`
   Coefficients map[string]float64 `json:"coefficients"`
-  N int `json:"n"`
+  NumTrainingData int `json:"num_training_data"`
   TrainRmse float64 `json:"train_rmse"`
   CvRmse float64 `json:"cv_rmse"`
 }

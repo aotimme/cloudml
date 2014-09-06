@@ -80,7 +80,7 @@ func (m *Model) CreateAndSaveDatum(covariates map[string]float64, value float64)
   if err != nil {
     return nil, err
   }
-  m.N++
+  m.NumTrainingData++
   err = m.Save()
   if err != nil {
     return nil, err
@@ -96,6 +96,6 @@ func (m *Model) DeleteData() error {
   for key, _ := range m.Coefficients {
     m.Coefficients[key] = 0.0
   }
-  m.N = 0
+  m.NumTrainingData = 0
   return m.Save()
 }
