@@ -11,6 +11,9 @@ import (
 
 var learnChannel chan string = make(chan string, 1000)
 
+type ErrorResponse struct {
+  Error string `json:"error"`
+}
 type PreModel struct {
   Type string `json:"type"`
   Covariates []string `json:"covariates"`
@@ -21,6 +24,18 @@ type PreDatum struct {
 }
 
 
+func SendError(rw http.ResponseWriter, message string, statusCode int) {
+  response := &ErrorResponse{Error: message}
+  jsonData, err := json.Marshal(response)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  log.Printf("sending error %v", string(jsonData))
+  rw.Header().Set("Content-Type", "application/json")
+  rw.WriteHeader(statusCode)
+  rw.Write(jsonData)
+}
 func SendModelJSON(rw http.ResponseWriter, model *db.Model) {
   jsonData, err := json.Marshal(model)
   if err != nil {
@@ -70,7 +85,9 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
   var pre PreModel
   err := decoder.Decode(&pre)
   if err != nil {
-    http.Error(rw, err.Error(), http.StatusBadRequest)
+    log.Printf(err.Error());
+    SendError(rw, "Malformed model data", http.StatusBadRequest);
+    //http.Error(rw, err.Error(), http.StatusBadRequest)
     return
   }
   m := &db.Model{Type: pre.Type, Coefficients: make(map[string]float64)}
@@ -110,7 +127,7 @@ func GetModelHandler(rw http.ResponseWriter, req *http.Request) {
   log.Printf("Handling GET \"/api/models/%v\"\n", id)
   m, err := db.GetModelById(id)
   if err != nil {
-    http.Error(rw, err.Error(), http.StatusNotFound)
+    SendError(rw, fmt.Sprintf("Could not find model with id %v", id), http.StatusNotFound)
     return
   }
   SendModelJSON(rw, m)

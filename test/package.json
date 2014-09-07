@@ -1,0 +1,11 @@
+{
+  "name": "cloudml-test",
+  "version": "0.0.1",
+  "devDependencies": {
+    "async": "^0.9.0",
+    "mocha": "^1.21.4",
+    "request": "^2.42.0",
+    "should": "^4.0.4",
+    "underscore": "^1.7.0"
+  }
+}
