@@ -90,9 +90,13 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
     //http.Error(rw, err.Error(), http.StatusBadRequest)
     return
   }
-  m := &db.Model{Type: pre.Type, Coefficients: make(map[string]float64)}
-  for _, covariate := range pre.Covariates {
-    m.Coefficients[covariate] = 0
+  m := &db.Model{
+    Type: pre.Type,
+    Coefficients: make([]db.Variable, len(pre.Covariates)),
+  }
+  for i, covariate := range pre.Covariates {
+    m.Coefficients[i].Label = covariate
+    m.Coefficients[i].Value = 0.0
   }
   if err != nil {
     http.Error(rw, err.Error(), http.StatusBadRequest)

@@ -30,14 +30,14 @@ func Predict(beta []float64, covariates []float64) float64 {
   return expit(dot(beta, covariates))
 }
 
-func Learn(data [][]float64, values []float64, betaStart []float64, iterations int) ([]float64, error) {
-  lambda := 0.001
+func Learn(data [][]float64, values []float64, lambda float64, betaStart []float64, iterations int) ([]float64, error) {
   n := len(data)
   p := len(betaStart)
   iter := 0
   X := matrix.MakeDenseMatrixStacked(data)
   //Y := matrix.MakeDenseMatrix(values, n, 1)
   beta := matrix.MakeDenseMatrix(betaStart, p, 1)
+  //log.Printf("X: %v\n", X)
   if p >= n {
     return beta.Array(), nil
   }
@@ -121,7 +121,7 @@ func RMSE(beta []float64, data [][]float64, values []float64) float64 {
   return math.Sqrt(rmse)
 }
 
-func CV(data [][]float64, values []float64) (float64, error) {
+func CV(data [][]float64, values []float64, lambda float64) (float64, error) {
   fold := 5
   n := len(data)
   p := len(data[0])
@@ -168,7 +168,7 @@ func CV(data [][]float64, values []float64) (float64, error) {
       }
     }
     betaStart := make([]float64, p)
-    betas, err := Learn(trainData, trainValues, betaStart, 100)
+    betas, err := Learn(trainData, trainValues, lambda, betaStart, 100)
     if err != nil {
       log.Printf("CV error: %v\n", err)
     } else {

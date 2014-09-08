@@ -13,10 +13,15 @@ func (d *Datum) getFileName() string {
   return path.Join(DATA_DIR, d.Model, "data", fmt.Sprintf("%v.json", d.Id))
 }
 
-func (m *Model) CreateDatum(covariates map[string]float64, value float64) (*Datum, error) {
+func (m *Model) CreateDatum(covMap map[string]float64, value float64) (*Datum, error) {
   id, err := newUUID()
   if err != nil {
     return nil, err
+  }
+  covariates := make([]Variable, len(m.Coefficients))
+  for i, coefficient := range m.Coefficients {
+    covariates[i].Label = coefficient.Label
+    covariates[i].Value = covMap[coefficient.Label]
   }
   d := &Datum{
     Id: id,
@@ -93,8 +98,8 @@ func (m *Model) DeleteData() error {
   if err != nil {
     return err
   }
-  for key, _ := range m.Coefficients {
-    m.Coefficients[key] = 0.0
+  for _, variable := range m.Coefficients {
+    variable.Value = 0.0
   }
   m.NumTrainingData = 0
   return m.Save()

@@ -14,10 +14,9 @@ func dot(vec1, vec2 []float64) (val float64) {
   return
 }
 
-func Learn(data [][]float64, values []float64) ([]float64, error) {
+func Learn(data [][]float64, values []float64, lambda float64) ([]float64, error) {
   n := len(data)
   p := len(data[0])
-  lambda := 0.001
   X := matrix.MakeDenseMatrixStacked(data)
   Y := matrix.MakeDenseMatrix(values, n, 1)
   Xt := X.Transpose()
@@ -60,7 +59,7 @@ func RMSE(beta []float64, data [][]float64, values []float64) float64 {
   return math.Sqrt(rmse)
 }
 
-func CV(data [][]float64, values []float64) (float64, error) {
+func CV(data [][]float64, values []float64, lambda float64) (float64, error) {
   fold := 5
   n := len(data)
   // NOTE: stop if p > fold*n
@@ -105,7 +104,7 @@ func CV(data [][]float64, values []float64) (float64, error) {
         trainValues[j - num] = values[j]
       }
     }
-    betas, err := Learn(trainData, trainValues)
+    betas, err := Learn(trainData, trainValues, lambda)
     if err != nil {
       log.Printf("CV error: %v\n", err)
     } else {
