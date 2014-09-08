@@ -34,7 +34,7 @@ describe('logistic', function() {
       data = data.toString();
       var lines = data.split('\r\n');
       var covariates = lines[0].split(',').splice(1);
-      LOGISTIC_MODEL = {type: 'logistic', covariates: covariates};
+      LOGISTIC_MODEL = {type: 'logistic', covariates: covariates, lambda: 0.001};
       LOGISTIC_DATA = _.chain(lines.splice(1))
         .map(function(line) {
           if (!line) {
@@ -102,7 +102,26 @@ describe('logistic', function() {
         datum.should.have.property('model', LOGISTIC_MODEL_ID);
       });
       // Let it learn...
-      setTimeout(done, 1000);
+      //setTimeout(done, 1000);
+      done();
+    });
+  });
+
+  it('should correctly learn', function(done) {
+    request({
+      url: CLOUDML_URL + '/api/models/' + LOGISTIC_MODEL_ID + '/learn',
+      method: 'POST',
+      json: true
+    }, function(err, resp, model) {
+      should.not.exist(err);
+      model.should.have.property('id', LOGISTIC_MODEL_ID);
+      model.should.have.property('num_training_data', LOGISTIC_DATA.length);
+      var coefMap = {};
+      _.each(model.coefficients, function(coef) {
+        coefMap[coef.label] = coef.value;
+      });
+      _.keys(coefMap).should.eql(LOGISTIC_MODEL.covariates);
+      done();
     });
   });
 
@@ -121,6 +140,20 @@ describe('logistic', function() {
       });
       _.keys(coefMap).should.eql(LOGISTIC_MODEL.covariates);
       //console.log('coefficients', model.coefficients);
+      done();
+    });
+  });
+
+  it('should perform cross-validation', function(done) {
+    request({
+      url: CLOUDML_URL + '/api/models/' + LOGISTIC_MODEL_ID + '/cv',
+      method: 'POST',
+      json: true
+    }, function(err, resp, model) {
+      should.not.exist(err);
+      model.should.have.property('id', LOGISTIC_MODEL_ID);
+      model.should.have.property('cv_rmse');
+      model.cv_rmse.should.not.equal(0);
       done();
     });
   });

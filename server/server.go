@@ -17,6 +17,7 @@ type ErrorResponse struct {
 type PreModel struct {
   Type string `json:"type"`
   Covariates []string `json:"covariates"`
+  Lambda float64 `json:"lambda"`
 }
 type PreDatum struct {
   Value float64 `json:"value"`
@@ -93,6 +94,7 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
   m := &db.Model{
     Type: pre.Type,
     Coefficients: make([]db.Variable, len(pre.Covariates)),
+    Lambda: pre.Lambda,
   }
   for i, covariate := range pre.Covariates {
     m.Coefficients[i].Label = covariate
@@ -176,7 +178,8 @@ func CreateDatumHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
-  learnChannel <- m.Id
+  //XXX(Alden): enable async learning?
+  //learnChannel <- m.Id
   SendDatumJSON(rw, d)
 }
 
@@ -205,7 +208,8 @@ func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
     }
     ds[i] = d
   }
-  learnChannel <- m.Id
+  //XXX(Alden): enable async learning?
+  //learnChannel <- m.Id
   SendDataJSON(rw, ds)
 }
 
@@ -310,6 +314,7 @@ func RemoveDataHandler(rw http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+  // TODO(Alden): if we really enable this, we should debounce the calls to `Learn`
   go func(ch <-chan string) {
     for id := range ch {
       m, err := db.GetModelById(id)
@@ -330,7 +335,7 @@ func main() {
   r.HandleFunc("/api/models/{id}/data", CreateDataHandler).Methods("POST")
   r.HandleFunc("/api/models/{id}/data", GetDataHandler).Methods("GET")
   r.HandleFunc("/api/models/{id}/data", RemoveDataHandler).Methods("DELETE")
-  // TODO: Remove? Not actually necessary (learn on each data save)
+  // XXX(Alden): Remove and do learning async?
   r.HandleFunc("/api/models/{id}/learn", LearnModelHandler).Methods("POST")
   r.HandleFunc("/api/models/{id}/predict", PredictModelHandler).Methods("POST")
   r.HandleFunc("/api/models/{id}/cv", CVModelHandler).Methods("POST")

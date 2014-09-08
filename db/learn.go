@@ -50,22 +50,20 @@ func (m *Model) SetCoefficientsFromArray(coefficients []float64) {
 }
 
 func (m *Model) Learn() error {
-  // TODO(Alden): Make this a parameter to the model
-  lambda := 0.001
   dataArray, values, err := m.GetDataArray()
   if err != nil {
     return err
   }
   var coefficients []float64
   if m.Type == "logistic" {
-    coefficients, err = logistic.Learn(dataArray, values, lambda, m.GetCoefficientsArray(), 100)
+    coefficients, err = logistic.Learn(dataArray, values, m.Lambda, m.GetCoefficientsArray(), 100)
     if err != nil {
       log.Printf("Error running regression: %v\n", err)
       return err
     }
     m.TrainRmse = logistic.RMSE(coefficients, dataArray, values)
   } else if m.Type == "linear" {
-    coefficients, err = linear.Learn(dataArray, values, lambda)
+    coefficients, err = linear.Learn(dataArray, values, m.Lambda)
     if err != nil {
       log.Printf("Error running regression\n")
       return err
@@ -82,21 +80,19 @@ func (m *Model) Learn() error {
 }
 
 func (m *Model) CV() error {
-  // TODO(Alden): as above, make this a parameter on the model
-  lambda := 0.001
   dataArray, values, err := m.GetDataArray()
   if err != nil {
     return err
   }
   var cv float64
   if m.Type == "logistic" {
-    cv, err = logistic.CV(dataArray, values, lambda)
+    cv, err = logistic.CV(dataArray, values, m.Lambda)
     if err != nil {
       log.Printf("Error running cv: %v\n", err)
       return err
     }
   } else if m.Type == "linear" {
-    cv, err = linear.CV(dataArray, values, lambda)
+    cv, err = linear.CV(dataArray, values, m.Lambda)
     if err != nil {
       log.Printf("Error running cv: %v\n", err)
       return err

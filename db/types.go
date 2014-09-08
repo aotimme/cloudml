@@ -9,6 +9,7 @@ type Model struct {
   Id string `json:"id"`
   Type string `json:"type"`
   Coefficients []Variable `json:"coefficients"`
+  Lambda float64 `json:"lambda"`
   NumTrainingData int `json:"num_training_data"`
   TrainRmse float64 `json:"train_rmse"`
   CvRmse float64 `json:"cv_rmse"`
