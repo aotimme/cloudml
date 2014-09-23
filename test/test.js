@@ -34,6 +34,7 @@ describe('logistic', function() {
       data = data.toString();
       var lines = data.split('\r\n');
       var covariates = lines[0].split(',').splice(1);
+      covariates.sort();
       LOGISTIC_MODEL = {type: 'logistic', covariates: covariates, lambda: 0.001};
       LOGISTIC_DATA = _.chain(lines.splice(1))
         .map(function(line) {
@@ -90,14 +91,28 @@ describe('logistic', function() {
     });
   });
 
+  it('should correctly add one datum', function(done) {
+    request({
+      url: CLOUDML_URL + '/api/models/' + LOGISTIC_MODEL_ID + '/datum',
+      method: 'POST',
+      json: LOGISTIC_DATA[0]
+    }, function(err, resp, datum) {
+      should.not.exist(err);
+      datum.should.have.property('model', LOGISTIC_MODEL_ID);
+      // Let it learn...
+      //setTimeout(done, 1000);
+      done();
+    });
+  });
+
   it('should correctly add the data', function(done) {
     request({
       url: CLOUDML_URL + '/api/models/' + LOGISTIC_MODEL_ID + '/data',
       method: 'POST',
-      json: LOGISTIC_DATA
+      json: LOGISTIC_DATA.slice(1)
     }, function(err, resp, data) {
       should.not.exist(err);
-      data.should.have.lengthOf(LOGISTIC_DATA.length);
+      data.should.have.lengthOf(LOGISTIC_DATA.length - 1);
       _.each(data, function(datum) {
         datum.should.have.property('model', LOGISTIC_MODEL_ID);
       });

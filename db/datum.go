@@ -1,106 +1,109 @@
 package db
 
 import (
-  "os"
-  "io/ioutil"
-  "encoding/json"
-  "fmt"
   "log"
-  "path"
 )
 
-func (d *Datum) getFileName() string {
-  return path.Join(DATA_DIR, d.Model, "data", fmt.Sprintf("%v.json", d.Id))
-}
-
 func (m *Model) CreateDatum(covMap map[string]float64, value float64) (*Datum, error) {
-  id, err := newUUID()
+  datumId, err := newUUID()
+  if err != nil {
+    log.Printf("Error creating UUID: %v\n", err)
+    return nil, err
+  }
+  coefficients, err := m.GetCoefficients()
   if err != nil {
     return nil, err
   }
-  covariates := make([]Variable, len(m.Coefficients))
-  for i, coefficient := range m.Coefficients {
+  covariates := make([]Covariate, len(coefficients))
+  for i, coefficient := range coefficients {
+    covId, err := newUUID()
+    if err != nil {
+      log.Printf("Error creating UUID: %v\n", err)
+      return nil, err
+    }
     covariates[i].Label = coefficient.Label
     covariates[i].Value = covMap[coefficient.Label]
+    covariates[i].Datum = datumId
+    covariates[i].Id = covId
   }
   d := &Datum{
-    Id: id,
-    Model: m.Id,
-    Covariates: covariates,
+    Id: datumId,
     Value: value,
+    Model: m.Id,
+  }
+  m.NumTrainingData++
+  txn, err := DBMAP.Begin()
+  if err != nil {
+    return nil, err
+  }
+  txn.Insert(d)
+  txn.Update(m)
+  for _, covariate := range covariates {
+    txn.Insert(&covariate)
+  }
+  err = txn.Commit()
+  if err != nil {
+    return nil, err
   }
   return d, nil
 }
 
 func (m *Model) GetData() ([]*Datum, error) {
-  dir, err := os.Open(m.getDataDirectoryName())
+  var data []*Datum
+  _, err := DBMAP.Select(&data, "select * from data where model=:model", map[string]interface{} {"model": m.Id})
   if err != nil {
     return nil, err
-  }
-  files, err := dir.Readdir(0)
-  if err != nil {
-    return nil, err
-  }
-  data := make([]*Datum, len(files))
-  for i, file := range files {
-    d, err := GetDatumFromFile(path.Join(dir.Name(), file.Name()))
-    if err != nil {
-      return nil, err
-    }
-    data[i] = d
   }
   return data, nil
 }
 
-func GetDatumFromJSON(jsonData []byte) (d *Datum, err error) {
-  err = json.Unmarshal(jsonData, &d)
+func (d *Datum) GetCovariates() ([]Covariate, error) {
+  var covariates []Covariate
+  _, err := DBMAP.Select(&covariates, "select * from covariates where datum=:datum order by label", map[string]interface{} {"datum": d.Id})
   if err != nil {
-    log.Printf("Error unmarshaling json in `GetModelFromJSON`\n")
+    return nil, err
   }
-  return
+  return covariates, nil
 }
-
-func GetDatumFromFile(filename string) (*Datum, error) {
-  jsonData, err := ioutil.ReadFile(filename)
+func GetDatumById(id string) (*Datum, error) {
+  obj, err := DBMAP.Get(Datum{}, id)
   if err != nil {
+    log.Fatal("Error getting datum", err)
     return nil, err
   }
-  return GetDatumFromJSON(jsonData)
-}
-
-func (d *Datum) Save() error {
-  jsonData, err := json.Marshal(d)
-  if err != nil {
-    return err
+  if obj == nil {
+    return nil, nil
   }
-  return ioutil.WriteFile(d.getFileName(), jsonData, 0644)
-}
-
-func (m *Model) CreateAndSaveDatum(covariates map[string]float64, value float64) (*Datum, error) {
-  d, err := m.CreateDatum(covariates, value)
-  if err != nil {
-    return nil, err
-  }
-  err = d.Save()
-  if err != nil {
-    return nil, err
-  }
-  m.NumTrainingData++
-  err = m.Save()
-  if err != nil {
-    return nil, err
-  }
-  return d, nil
+  datum := obj.(*Datum)
+  return datum, nil
 }
 
 func (m *Model) DeleteData() error {
-  err := os.RemoveAll(m.getDataDirectoryName())
+  var dataIds []string
+  _, err := DBMAP.Select(&dataIds, "select id from data where model=:model", map[string]interface{}{"model": m.Id})
   if err != nil {
     return err
   }
-  for _, variable := range m.Coefficients {
-    variable.Value = 0.0
+  txn, err := DBMAP.Begin()
+  if err != nil {
+    return err
   }
+  for _, datumId := range dataIds {
+    txn.Exec("delete from covariates where datum=:datum",  map[string]interface{} {"datum": datumId})
+  }
+  txn.Exec("delete from data where model=:model", map[string]interface{} {"model": m.Id})
+  err = txn.Commit()
+  if err != nil {
+    return err
+  }
+
   m.NumTrainingData = 0
-  return m.Save()
+  coefficients, err := m.GetCoefficients()
+  if err != nil {
+    return err
+  }
+  for _, coefficient := range coefficients {
+    coefficient.Value = 0.0
+  }
+  return m.SaveWithCoefficients(coefficients)
 }

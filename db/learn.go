@@ -4,29 +4,25 @@ import (
   "github.com/aotimme/cloudml/logistic"
   "github.com/aotimme/cloudml/linear"
   "log"
+  "errors"
 )
-
-func (m *Model) GetCovariates() []string {
-  p := len(m.Coefficients)
-  covKeys := make([]string, p)
-  for i, variable := range m.Coefficients {
-    covKeys[i] = variable.Label
-  }
-  return covKeys
-}
 
 func (m *Model) GetDataArray() ([][]float64, []float64, error) {
   data, err := m.GetData()
   if err != nil {
     return nil, nil, err
   }
-  n := len(data)
-  p := len(m.Coefficients)
+  n := m.NumTrainingData
+  p := m.NumCovariates
   dataArray := make([][]float64, n)
   values := make([]float64, n)
   for i, datum := range data {
     dataArray[i] = make([]float64, p)
-    for j, cov := range datum.Covariates {
+    covariates, err := datum.GetCovariates()
+    if err != nil {
+      return nil, nil, err
+    }
+    for j, cov := range covariates {
       dataArray[i][j] = cov.Value
     }
     values[i] = datum.Value
@@ -34,19 +30,12 @@ func (m *Model) GetDataArray() ([][]float64, []float64, error) {
   return dataArray, values, nil
 }
 
-func (m *Model) GetCoefficientsArray() []float64 {
-  p := len(m.Coefficients)
-  coefficients := make([]float64, p)
-  for j, variable := range m.Coefficients {
-    coefficients[j] = variable.Value
+func GetCoefficientsArrayFromCoefficients(coefficients []Coefficient) []float64 {
+  array := make([]float64, len(coefficients))
+  for j, coef := range coefficients {
+    array[j] = coef.Value
   }
-  return coefficients
-}
-
-func (m *Model) SetCoefficientsFromArray(coefficients []float64) {
-  for j, value := range coefficients {
-    m.Coefficients[j].Value = value
-  }
+  return array
 }
 
 func (m *Model) Learn() error {
@@ -54,24 +43,30 @@ func (m *Model) Learn() error {
   if err != nil {
     return err
   }
-  var coefficients []float64
+  coefficients, err := m.GetCoefficients()
+  if err != nil {
+    return err
+  }
+  var coefArray []float64
   if m.Type == "logistic" {
-    coefficients, err = logistic.Learn(dataArray, values, m.Lambda, m.GetCoefficientsArray(), 100)
+    coefArray, err = logistic.Learn(dataArray, values, m.Lambda, GetCoefficientsArrayFromCoefficients(coefficients), 100)
     if err != nil {
       log.Printf("Error running regression: %v\n", err)
       return err
     }
-    m.TrainRmse = logistic.RMSE(coefficients, dataArray, values)
+    m.TrainRmse = logistic.RMSE(coefArray, dataArray, values)
   } else if m.Type == "linear" {
-    coefficients, err = linear.Learn(dataArray, values, m.Lambda)
+    coefArray, err = linear.Learn(dataArray, values, m.Lambda)
     if err != nil {
       log.Printf("Error running regression\n")
       return err
     }
-    m.TrainRmse = linear.RMSE(coefficients, dataArray, values)
+    m.TrainRmse = linear.RMSE(coefArray, dataArray, values)
   }
-  m.SetCoefficientsFromArray(coefficients)
-  err = m.Save()
+  for j, value := range coefArray {
+    coefficients[j].Value = value
+  }
+  err = m.SaveWithCoefficients(coefficients)
   if err != nil {
     log.Printf("Error saving model\n")
     return err
@@ -99,7 +94,7 @@ func (m *Model) CV() error {
     }
   }
   m.CvRmse = cv
-  err = m.Save()
+  err = m.Update()
   if err != nil {
     log.Printf("Error saving model\n")
     return err
@@ -107,22 +102,26 @@ func (m *Model) CV() error {
   return nil
 }
 
-func (m *Model) Predict(covariates map[string]float64) float64 {
-  dot := 0.0
-  for _, variable := range m.Coefficients {
-    dot += variable.Value * covariates[variable.Label]
+func (m *Model) Predict(covariates map[string]float64) (float64, error) {
+  coefficients, err := m.GetCoefficients()
+  if err != nil {
+    return 0.0, err
   }
-  coefficients := m.GetCoefficientsArray()
-  covKeys := m.GetCovariates()
-  p := len(m.Coefficients)
-  covs := make([]float64, p)
-  for j, cov := range covKeys {
-    covs[j] = covariates[cov]
+  dot := 0.0
+  for _, coef := range coefficients {
+    dot += coef.Value * covariates[coef.Label]
+  }
+  coefArray := GetCoefficientsArrayFromCoefficients(coefficients)
+  covs := make([]float64, len(coefficients))
+  for j, coef := range coefficients {
+    covs[j] = covariates[coef.Label]
   }
   if m.Type == "logistic" {
-    return logistic.Predict(coefficients, covs)
+    result := logistic.Predict(coefArray, covs)
+    return result, nil
   } else if m.Type == "linear" {
-    return linear.Predict(coefficients, covs)
+    result := linear.Predict(coefArray, covs)
+    return result, nil
   }
-  return 0.0
+  return 0.0, errors.New("Unknown model type")
 }

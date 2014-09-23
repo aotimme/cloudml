@@ -37,8 +37,40 @@ func SendError(rw http.ResponseWriter, message string, statusCode int) {
   rw.WriteHeader(statusCode)
   rw.Write(jsonData)
 }
-func SendModelJSON(rw http.ResponseWriter, model *db.Model) {
-  jsonData, err := json.Marshal(model)
+
+func GetDatumById(datumId string) (*Datum, error) {
+  datum, err := db.GetDatumById(datumId)
+  if err != nil {
+    return nil, err
+  }
+  covariates, err := datum.GetCovariates()
+  if err != nil {
+    return nil, err
+  }
+  covs := make([]Covariate, len(covariates))
+  for i, cov := range covariates {
+    covs[i] = Covariate{
+      Id: cov.Id,
+      Datum: cov.Datum,
+      Label: cov.Label,
+      Value: cov.Value,
+    }
+  }
+  d := &Datum{
+    Id: datum.Id,
+    Model: datum.Model,
+    Value: datum.Value,
+    Covariates: covs,
+  }
+  return d, nil
+}
+func SendDatumById(rw http.ResponseWriter, datumId string) {
+  d, err := GetDatumById(datumId)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  jsonData, err := json.Marshal(d)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
@@ -46,7 +78,67 @@ func SendModelJSON(rw http.ResponseWriter, model *db.Model) {
   rw.Header().Set("Content-Type", "application/json")
   rw.Write(jsonData)
 }
-func SendModelsJSON(rw http.ResponseWriter, models []*db.Model) {
+
+func GetModelFromDBModelAndCoefficients(m *db.Model, cs []db.Coefficient) (*Model) {
+  coefficients := make([]Coefficient, len(cs))
+  for i, c := range cs {
+    coefficients[i] = Coefficient{
+      Id: c.Id,
+      Model: c.Model,
+      Label: c.Label,
+      Value: c.Value,
+    }
+  }
+  return &Model{
+    Id: m.Id,
+    Type: m.Type,
+    Lambda: m.Lambda,
+    NumTrainingData: m.NumTrainingData,
+    NumCovariates: m.NumCovariates,
+    TrainRmse: m.TrainRmse,
+    CvRmse: m.CvRmse,
+    Coefficients: coefficients,
+  }
+}
+func GetModelById(modelId string) (*Model, error) {
+  model, coefficients, err := db.GetModelAndCoefficientsById(modelId)
+  if err != nil {
+    return nil, err
+  }
+  if model == nil {
+    return nil, nil
+  }
+  m := GetModelFromDBModelAndCoefficients(model, coefficients)
+  return m, nil
+}
+func SendModelById(rw http.ResponseWriter, modelId string) {
+  m, err := GetModelById(modelId)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  if m == nil {
+    http.Error(rw, "Not Found", http.StatusNotFound)
+    return
+  }
+  jsonData, err := json.Marshal(m)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  rw.Header().Set("Content-Type", "application/json")
+  rw.Write(jsonData)
+}
+func SendAllModelsByIds(rw http.ResponseWriter, modelIds []string) {
+  models := make([]*Model, len(modelIds))
+  for i, modelId := range modelIds {
+    m, err := GetModelById(modelId)
+    if err != nil {
+      http.Error(rw, err.Error(), http.StatusInternalServerError)
+      return
+    }
+    models[i] = m
+  }
   jsonData, err := json.Marshal(models)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -65,7 +157,7 @@ func SendDatumJSON(rw http.ResponseWriter, d *db.Datum) {
   rw.Header().Set("Content-Type", "application/json")
   rw.Write(jsonData)
 }
-func SendDataJSON(rw http.ResponseWriter, ds []*db.Datum) {
+func SendDataJSON(rw http.ResponseWriter, ds []*Datum) {
   jsonData, err := json.Marshal(ds)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -93,19 +185,19 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
   }
   m := &db.Model{
     Type: pre.Type,
-    Coefficients: make([]db.Variable, len(pre.Covariates)),
     Lambda: pre.Lambda,
   }
+  coefficients := make([]db.Coefficient, len(pre.Covariates))
   for i, covariate := range pre.Covariates {
-    m.Coefficients[i].Label = covariate
-    m.Coefficients[i].Value = 0.0
+    coefficients[i].Label = covariate
+    coefficients[i].Value = 0.0
   }
   if err != nil {
     http.Error(rw, err.Error(), http.StatusBadRequest)
     return
   }
   log.Printf("Creating model: %v\n", m)
-  err = m.Save()
+  err = m.SaveWithCoefficients(coefficients)
   if err == nil {
     log.Printf("Successfully created model: %v\n", m)
   } else {
@@ -113,17 +205,17 @@ func CreateModelHandler(rw http.ResponseWriter, req *http.Request) {
     return
   }
 
-  SendModelJSON(rw, m)
+  SendModelById(rw, m.Id)
 }
 
 func GetModelsHandler(rw http.ResponseWriter, req *http.Request) {
   log.Printf("Handling GET \"/api/models\"\n")
-  models, err := db.GetAllModels()
+  modelIds, err := db.GetAllModelIds()
   if err != nil {
     http.Error(rw, err.Error(), http.StatusNotFound)
     return
   }
-  SendModelsJSON(rw, models)
+  SendAllModelsByIds(rw, modelIds)
 }
 
 
@@ -131,24 +223,15 @@ func GetModelHandler(rw http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
   id := vars["id"]
   log.Printf("Handling GET \"/api/models/%v\"\n", id)
-  m, err := db.GetModelById(id)
-  if err != nil {
-    SendError(rw, fmt.Sprintf("Could not find model with id %v", id), http.StatusNotFound)
-    return
-  }
-  SendModelJSON(rw, m)
+  SendModelById(rw, id)
+  //SendError(rw, fmt.Sprintf("Could not find model with id %v", id), http.StatusNotFound)
 }
 
 func DeleteModelHandler(rw http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
   id := vars["id"]
-  log.Printf("Handling GET \"/api/models/%v\"\n", id)
-  m, err := db.GetModelById(id)
-  if err != nil {
-    http.Error(rw, err.Error(), http.StatusNotFound)
-    return
-  }
-  err = m.Delete()
+  log.Printf("Handling DELETE \"/api/models/%v\"\n", id)
+  err := db.DeleteModelById(id)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
@@ -173,14 +256,14 @@ func CreateDatumHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusBadRequest)
     return
   }
-  d, err := m.CreateAndSaveDatum(pre.Covariates, pre.Value)
+  d, err := m.CreateDatum(pre.Covariates, pre.Value)
   if err != nil {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
   //XXX(Alden): enable async learning?
   //learnChannel <- m.Id
-  SendDatumJSON(rw, d)
+  SendDatumById(rw, d.Id)
 }
 
 func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
@@ -201,7 +284,7 @@ func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
   }
   ds := make([]*db.Datum, len(pres))
   for i, pre := range pres {
-    d, err := m.CreateAndSaveDatum(pre.Covariates, pre.Value)
+    d, err := m.CreateDatum(pre.Covariates, pre.Value)
     if err != nil {
       http.Error(rw, err.Error(), http.StatusBadRequest)
       return
@@ -210,7 +293,16 @@ func CreateDataHandler(rw http.ResponseWriter, req *http.Request) {
   }
   //XXX(Alden): enable async learning?
   //learnChannel <- m.Id
-  SendDataJSON(rw, ds)
+  // TODO: Actually get data (with covariates) and send
+  data := make([]*Datum, len(ds))
+  for i, datum := range ds {
+    data[i], err = GetDatumById(datum.Id)
+    if err != nil {
+      http.Error(rw, err.Error(), http.StatusInternalServerError)
+      return
+    }
+  }
+  SendDataJSON(rw, data)
 }
 
 func LearnModelHandler(rw http.ResponseWriter, req *http.Request) {
@@ -227,7 +319,7 @@ func LearnModelHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
-  SendModelJSON(rw, m)
+  SendModelById(rw, m.Id)
 }
 
 func CVModelHandler(rw http.ResponseWriter, req *http.Request) {
@@ -244,7 +336,7 @@ func CVModelHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
-  SendModelJSON(rw, m)
+  SendModelById(rw, m.Id)
 }
 
 
@@ -265,7 +357,11 @@ func PredictModelHandler(rw http.ResponseWriter, req *http.Request) {
     return
   }
 
-  prediction := m.Predict(pre.Covariates)
+  prediction, err := m.Predict(pre.Covariates)
+  if err != nil {
+    http.Error(rw, err.Error(), http.StatusInternalServerError)
+    return
+  }
   resp := make(map[string]float64)
   resp["value"] = prediction
 
@@ -292,7 +388,16 @@ func GetDataHandler(rw http.ResponseWriter, req *http.Request) {
     http.Error(rw, err.Error(), http.StatusInternalServerError)
     return
   }
-  SendDataJSON(rw, ds)
+  // TODO: Send data with covariates
+  data := make([]*Datum, len(ds))
+  for i, datum := range ds {
+    data[i], err = GetDatumById(datum.Id)
+    if err != nil {
+      http.Error(rw, err.Error(), http.StatusInternalServerError)
+      return
+    }
+  }
+  SendDataJSON(rw, data)
 }
 
 func RemoveDataHandler(rw http.ResponseWriter, req *http.Request) {
