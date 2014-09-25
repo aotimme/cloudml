@@ -8,23 +8,29 @@ import (
   _ "github.com/lib/pq"
 )
 
-var DATA_DIR="/tmp/cloudml"
 var DBMAP *gorp.DbMap
 
 func init() {
-  if _, err := os.Stat(DATA_DIR); err != nil {
-    err := os.Mkdir(DATA_DIR, 0755)
-    if err != nil {
-      log.Fatal(err)
-    }
-  }
   DBMAP = initDb()
 }
 
 func initDb() *gorp.DbMap {
+  user := os.Getenv("USER")
+  password := os.Getenv("PASS")
+  dbname := os.Getenv("DBNAME")
+  sqlOptionsString := "sslmode=disable"
+  if dbname != "" {
+    sqlOptionsString += " dbname=" + dbname
+  }
+  if user != "" {
+    sqlOptionsString += " user=" + user
+  }
+  if password != "" {
+    sqlOptionsString += " password=" + password
+  }
   // connect to db using standard Go database/sql API
   // use whatever database/sql driver you wish
-  db, err := sql.Open("postgres", "dbname=cloudml sslmode=disable")
+  db, err := sql.Open("postgres", sqlOptionsString)
   if err != nil {
     log.Fatal(err)
   }
